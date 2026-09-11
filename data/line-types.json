@@ -1,0 +1,22 @@
+{
+  "525000": {
+    "nom": "Ligne des Sables-d'Olonne à Tours",
+    "types": ["TER"],
+    "note": "Confirmé par les données GTFS SNCF (horaires réels) : uniquement du TER (La Roche-sur-Yon–Bournezeau–Chantonnay–Bressuire–Saumur/Tours). Le TGV Paris–Les Sables-d'Olonne passe par un autre itinéraire (via La Roche-sur-Yon direct), pas par cette ligne."
+  },
+  "530000": {
+    "nom": "Ligne de Nantes-Orléans à Saintes (axe Nantes – La Roche-sur-Yon – La Rochelle)",
+    "types": ["TER", "Intercités"],
+    "note": "Confirmé par les données GTFS SNCF (horaires réels) : TER (Nantes–La Rochelle) et Intercités (Nantes–La Rochelle–Bordeaux)."
+  },
+  "529000": {
+    "nom": "Ligne de Fontenay-le-Comte à Niort",
+    "types": ["Aucun train voyageurs actuellement"],
+    "note": "Confirmé par les données GTFS SNCF (horaires réels) : aucune circulation de train sur ce corridor. Desserte assurée par autocar (substitution SNCF, ligne Aléop 16)."
+  },
+  "523000": {
+    "nom": "Ligne de Cholet à Mauléon",
+    "types": ["Aucun train voyageurs actuellement"],
+    "note": "Confirmé par les données GTFS SNCF (horaires réels) : les trains (TER Nantes–Cholet, ligne K8/P6) s'arrêtent à Cholet et ne vont pas jusqu'à Mauléon. Le tronçon Cholet–Mauléon est uniquement desservi par autocar (substitution SNCF)."
+  }
+}
