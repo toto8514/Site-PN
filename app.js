@@ -4,7 +4,7 @@
  * horaires des trains, rendu carte + liste).
  *
  * Sources de données :
- *  - ROUTE (tracé GPS)      : fichier local data/route.json par défaut, ou un GPX importé.
+ *  - ROUTE (tracé GPS)      : un GPX importé.
  *  - PN_DATA (passages à niveau) : API en direct SNCF Réseau (ArcGIS FeatureServer),
  *                                  interrogée sur la zone géographique (bbox) du tracé actuel —
  *                                  donc les lignes SNCF traversées sont détectées automatiquement,
@@ -176,8 +176,14 @@ async function withFallback(label, liveFn, localPath, allowLocalFallback) {
 }
 
 async function init() {
-  let ROUTE = await loadJSON('data/route.json');
-  const ROUTE_ORIGINAL = ROUTE; // gardé de côté pour le bouton "tracé d'origine"
+  let ROUTE = [];
+  let ROUTE_ORIGINAL = null;
+  try {
+    ROUTE = await loadJSON('data/route.json');
+    ROUTE_ORIGINAL = ROUTE; // gardé de côté pour le bouton "tracé d'origine"
+  } catch (e) {
+    console.warn('Aucun tracé par défaut — en attente d\'un import GPX.');
+  }
   const scheduleFile = await loadJSON('data/schedule.json');
   const SCHEDULE = scheduleFile.schedule;
   const SCHEDULE_DATE = scheduleFile.date;
@@ -231,7 +237,12 @@ async function init() {
   }
   
   // ---------- map ----------
-  const map = L.map('map', {zoomControl:true}).setView(ROUTE[Math.floor(ROUTE.length/2)], 10);
+  // Carte Leaflet centrée sur le tracé (ou sur la France si aucun tracé).
+  const FRANCE_CENTRE = [46.6, 1.88];
+  const FRANCE_ZOOM = 6;
+  const center = ROUTE.length ? ROUTE[Math.floor(ROUTE.length/2)] : FRANCE_CENTRE;
+  const zoom = ROUTE.length ? 10 : FRANCE_ZOOM;
+  const map = L.map('map', {zoomControl:true}).setView(center, zoom);
   
   const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
@@ -249,17 +260,25 @@ async function init() {
   
   function drawRoute(points){
     ROUTE = points;
+    if (routeLine) map.removeLayer(routeLine);
+    if (startMarker) map.removeLayer(startMarker);
+    if (endMarker) map.removeLayer(endMarker);
+    routeLine = startMarker = endMarker = null;
+
+    if (!ROUTE.length) {
+      cum = [0]; totalDist = 0;
+      document.getElementById('statDist').textContent = '–';
+      map.setView([46.6, 1.88], 6); // revient sur la vue France si le tracé est vidé
+      return;
+    }
+
     cum = [0];
     for(let i=1;i<ROUTE.length;i++) cum.push(cum[i-1]+haversine(ROUTE[i-1], ROUTE[i]));
     totalDist = cum[cum.length-1];
     document.getElementById('statDist').textContent = fmtKm(totalDist);
-  
-    if (routeLine) map.removeLayer(routeLine);
-    if (startMarker) map.removeLayer(startMarker);
-    if (endMarker) map.removeLayer(endMarker);
-  
+
     routeLine = L.polyline(ROUTE, {color:'#4f9d69', weight:3.5, opacity:0.9}).addTo(map);
-    map.fitBounds(routeLine.getBounds(), {padding:[24,24]});
+    map.fitBounds(routeLine.getBounds(), {padding:[24,24]}); // zoom auto sur la zone du tracé
     startMarker = L.circleMarker(ROUTE[0], {radius:6, color:'#eef0ec', fillColor:'#4f9d69', fillOpacity:1, weight:2}).addTo(map).bindTooltip("Départ");
     endMarker = L.circleMarker(ROUTE[ROUTE.length-1], {radius:6, color:'#eef0ec', fillColor:'#d1495b', fillOpacity:1, weight:2}).addTo(map).bindTooltip("Arrivée");
   }
@@ -529,9 +548,13 @@ async function init() {
   
   drawRoute(ROUTE);
   recomputeSummary();
-  statusEl.textContent = "Recherche des passages à niveau et voies ferrées sur cette zone (SNCF Réseau)…";
-  await loadDataForRoute(ROUTE, true);
-  refreshAll();
+  if (ROUTE.length) {
+    statusEl.textContent = "Recherche des passages à niveau et voies ferrées sur cette zone (SNCF Réseau)…";
+    await loadDataForRoute(ROUTE, true);
+    refreshAll();
+  } else {
+    statusEl.textContent = "Importez un fichier GPX pour commencer.";
+  }
 }
 
 init().catch(err => {
