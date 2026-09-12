@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Passages à niveau — Jard - Les Herbiers 2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Jard – Les Herbiers 2026 <span>· passages à niveau sur le parcours</span></h1>
+  <div class="controls">
+    <div class="field">
+      <label for="startTime">Départ</label>
+      <input id="startTime" type="time" value="14:30" step="60">
+    </div>
+    <div class="field">
+      <label for="speed">Allure (km/h)</label>
+      <input id="speed" type="number" value="40" min="10" max="60" step="1">
+    </div>
+    <div class="field">
+      <label for="buffer">Recherche PN officiel (m)</label>
+      <input id="buffer" type="number" value="100" min="20" max="500" step="10">
+    </div>
+    <div class="gpx-import">
+      <label for="gpxFile" class="btn">📂 Importer un GPX</label>
+      <input id="gpxFile" type="file" accept=".gpx,application/gpx+xml">
+      <button type="button" id="gpxReset" class="gpx-reset">↺ Tracé d'origine</button>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="stat"><div class="v" id="statDist">–</div><div class="l">distance totale</div></div>
+    <div class="stat"><div class="v" id="statFinish">–</div><div class="l">arrivée estimée</div></div>
+    <div class="stat"><div class="v" id="statPN">–</div><div class="l">PN détectés</div></div>
+    <div class="badge">Chargement des sources SNCF Réseau…</div>
+  </div>
+</header>
+
+<main>
+  <div id="map"></div>
+  <aside>
+    <div class="status" id="status">–</div>
+    <div id="list"></div>
+  </aside>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
