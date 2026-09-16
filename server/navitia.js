@@ -18,11 +18,19 @@ function authHeader() {
 async function navitiaFetch(path) {
   const url = `${BASE_URL}${path}`;
   const res = await fetch(url, { headers: { Authorization: authHeader() } });
+  const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Navitia ${res.status} sur ${path} — ${detail.slice(0, 300)}`);
+    // Navitia répond parfois "404" avec un corps JSON exploitable (ex: date hors bornes)
+    // plutôt qu'un vrai "pas trouvé" — on remonte ce message précis s'il existe.
+    const apiMessage = data?.error?.message;
+    if (apiMessage) {
+      const err = new Error(apiMessage);
+      err.navitiaErrorId = data.error.id;
+      throw err;
+    }
+    throw new Error(`Navitia ${res.status} sur ${path}`);
   }
-  return res.json();
+  return data;
 }
 
 /**

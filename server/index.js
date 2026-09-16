@@ -84,7 +84,11 @@ app.get('/api/pn-schedule', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[pn-schedule]', err.message);
-    res.status(502).json({ error: err.message, trains: [] });
+    const isDateBound = err.navitiaErrorId === 'date_out_of_bounds';
+    const userMessage = isDateBound
+      ? "Cette date n'est pas (encore) couverte par les horaires SNCF (trop loin dans le futur, ou déjà passée)."
+      : err.message;
+    res.status(isDateBound ? 200 : 502).json({ error: userMessage, trains: [] });
   }
 });
 
