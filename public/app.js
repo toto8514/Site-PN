@@ -19,6 +19,14 @@
  *                                  et loadSchedulesForCrossings() plus bas. Fonctionne pour
  *                                  n'importe quel tracé importé, pas seulement Jard–Les Herbiers.
  */
+// Attendre que le DOM soit chargé
+document.addEventListener('DOMContentLoaded', function() {
+    // Récupère la date du jour au format YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
+
+    // Définit la valeur du champ startDate
+    document.getElementById('startDate').value = today;
+});
 
 // Attendre que le DOM soit chargé
 document.addEventListener('DOMContentLoaded', function() {
