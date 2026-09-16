@@ -420,7 +420,7 @@ async function init() {
       listEl.innerHTML = '<div class="empty">Aucun croisement géométrique route/voie ferrée n\'a de passage à niveau officiel à proximité (base SNCF Réseau). Essaie d\'augmenter le rayon de recherche ci-dessus si tu penses qu\'il en manque un.</div>';
       return;
     }
-    statusEl.textContent = crossings.length + " passage(s) à niveau confirmé(s) sur le tracé (croisement géométrique + correspondance officielle SNCF Réseau).";
+    statusEl.textContent = crossings.length + " passage(s) à niveau confirmé(s) sur le tracé.";
   
     crossings.forEach((c, idx)=>{
       const item = document.createElement('div');
@@ -460,8 +460,8 @@ async function init() {
       const t = fmtTimeFromMinutes(startMin, addMin);
       const item = listEl.children[idx];
       const pn = c.pn;
-      const lineTag = `<div class="line">${fmtLigne(pn.ligne)} · PK ${pn.pk}</div>`;
-      const metaLine = `<div class="km">km ${(c.cumMeters/1000).toFixed(1)} · ${pn.libelle}</div><div class="meta">${pn.commune || ''} · voie franchie : ${pn.obstacle || '–'} · ${pn.mnemo || ''} (PN officiel à ${pn.matchDist.toFixed(0)} m)</div>`;
+      const lineTag = `<div class="line"></div>`;
+      const metaLine = `<div class="km">km ${(c.cumMeters/1000).toFixed(1)} · ${pn.libelle}</div><div class="meta">${pn.commune || ''} · ${fmtLigne(pn.ligne)} · PK ${pn.pk}</div>`;
   
       // Les horaires viennent maintenant de l'API SNCF temps réel, récupérés pour la gare
       // la plus proche de ce PN précis (cf. loadSchedulesForCrossings / c.trains).
@@ -472,7 +472,7 @@ async function init() {
         const absDelta = Math.abs(ct.delta);
         riskClass = riskLevel(absDelta);
         const sign = ct.delta>=0 ? 'après' : 'avant';
-        const rt = ct.realtime ? ' · temps réel' : ' · horaire théorique (pas de donnée temps réel dispo)';
+        const rt = ct.realtime ? ' · temps réel' : ' · horaire théorique';
         const margin = ct.margin_min ? ` (± ${ct.margin_min} min${rt})` : rt;
         trainBlock = `<div class="train ${riskClass}">Train le plus proche : <strong>${ct.t}</strong>${margin} (${ct.type}) — ${Math.round(absDelta)} min ${sign} le passage des coureurs</div>`;
       } else if (c.stationInfo && c.stationInfo.error) {
