@@ -12,10 +12,12 @@
  *                                  uniquement pour le tracé d'origine (zone Jard–Les Herbiers).
  *  - RAIL_DATA (voies ferrées)   : API en direct SNCF (portail officiel, "formes-des-lignes-du-rfn"),
  *                                  même logique de zone géographique + repli.
- *  - SCHEDULE (horaires trains)  : fichier local data/schedule.json (uniquement pour la zone
- *                                  Jard–Les Herbiers). L'API SNCF temps réel demande une clé d'API
- *                                  qui ne peut pas être exposée dans du JS côté navigateur ; il
- *                                  faudrait un petit serveur relais (backend) pour aller plus loin.
+ *  - Horaires trains (SCHEDULE) : API SNCF temps réel (moteur Navitia), via un petit backend
+ *                                  relais (server/index.js) qui garde la clé API côté serveur.
+ *                                  Pour chaque PN, le backend trouve la gare la plus proche et
+ *                                  renvoie ses prochains passages réels — voir fetchPNSchedule()
+ *                                  et loadSchedulesForCrossings() plus bas. Fonctionne pour
+ *                                  n'importe quel tracé importé, pas seulement Jard–Les Herbiers.
  */
 
 async function loadJSON(url) {
@@ -184,9 +186,9 @@ async function init() {
   } catch (e) {
     console.warn('Aucun tracé par défaut — en attente d\'un import GPX.');
   }
-  const scheduleFile = await loadJSON('data/schedule.json');
-  const SCHEDULE = scheduleFile.schedule;
-  const SCHEDULE_DATE = scheduleFile.date;
+  // Les horaires ne viennent plus d'un fichier local pré-calculé : ils sont
+  // demandés en direct au backend (relais vers l'API SNCF temps réel), gare
+  // la plus proche de chaque PN, pour la date choisie. Voir fetchPNSchedule().
   // Table de référence "type de trafic par ligne" (TER/Intercités/TGV/aucun...), construite au
   // fil des lignes réellement rencontrées via recherche web — pas une source SNCF officielle,
   // pas de couverture nationale. Une ligne absente de cette table = pas encore recherchée.
@@ -372,6 +374,33 @@ async function init() {
       .filter(c => c.pn !== null);
   }
   
+  // ---------- horaires temps réel (backend / API SNCF) ----------
+  // Interroge le backend pour un PN donné (gare la plus proche + prochains
+  // passages temps réel autour de la date/heure de la course).
+  async function fetchPNSchedule(pn, dateISO, timeHHMM) {
+    const url = `/api/pn-schedule?lat=${pn.lat}&lon=${pn.lon}&date=${dateISO}&time=${encodeURIComponent(timeHHMM)}`;
+    try {
+      return await loadJSON(url);
+    } catch (err) {
+      console.warn('[pn-schedule] échec pour', pn.libelle, ':', err.message);
+      return { trains: [], stationName: null, distance: null, error: err.message };
+    }
+  }
+
+  // Récupère en parallèle les horaires temps réel pour tous les PN du tracé
+  // actuel. À appeler après computeCrossings() et avant render()/updateTimes().
+  async function loadSchedulesForCrossings(dateISO, timeHHMM) {
+    if (badgeEl) badgeEl.textContent = 'Interrogation des horaires SNCF temps réel…';
+    await Promise.all(crossings.map(async (c) => {
+      const result = await fetchPNSchedule(c.pn, dateISO, timeHHMM);
+      c.trains = result.trains || [];
+      c.stationInfo = { name: result.stationName, distance: result.distance, error: result.error };
+    }));
+    if (badgeEl) {
+      badgeEl.textContent = `Source : SNCF Réseau (PN/voies) · Horaires : API SNCF temps réel`;
+    }
+  }
+
   function recomputeSummary(){
     const startMin = parseTimeToMinutes(document.getElementById('startTime').value || "14:30");
     const speed = parseFloat(document.getElementById('speed').value) || 40;
@@ -407,8 +436,7 @@ async function init() {
   
   function timeToMinutes(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
   
-  function closestTrain(scheduleKey, raceMin){
-    const trains = SCHEDULE[scheduleKey];
+  function closestTrain(trains, raceMin){
     if(!trains || trains.length===0) return null;
     let best=null, bestDelta=Infinity;
     trains.forEach(tr=>{
@@ -435,26 +463,30 @@ async function init() {
       const lineTag = `<div class="line">${fmtLigne(pn.ligne)} · PK ${pn.pk}</div>`;
       const metaLine = `<div class="km">km ${(c.cumMeters/1000).toFixed(1)} · ${pn.libelle}</div><div class="meta">${pn.commune || ''} · voie franchie : ${pn.obstacle || '–'} · ${pn.mnemo || ''} (PN officiel à ${pn.matchDist.toFixed(0)} m)</div>`;
   
-      // Les horaires SCHEDULE sont indexés par PN précis (ligne:pk), pas par ligne entière :
-      // un TER et un Intercités n'ont pas les mêmes gares d'encadrement, donc pas la même
-      // interpolation — cf. data/schedule.json → "methodology" pour le détail.
-      const scheduleKey = `${pn.ligne}:${pn.pk}`;
-      const ct = closestTrain(scheduleKey, raceMin);
+      // Les horaires viennent maintenant de l'API SNCF temps réel, récupérés pour la gare
+      // la plus proche de ce PN précis (cf. loadSchedulesForCrossings / c.trains).
+      const raceDate = document.getElementById('startDate').value;
+      const ct = closestTrain(c.trains, raceMin);
       let trainBlock, riskClass;
       if(ct){
         const absDelta = Math.abs(ct.delta);
         riskClass = riskLevel(absDelta);
         const sign = ct.delta>=0 ? 'après' : 'avant';
-        const margin = ct.margin_min ? ` (± ${ct.margin_min} min, estimation interpolée)` : '';
+        const rt = ct.realtime ? ' · temps réel' : ' · horaire théorique (pas de donnée temps réel dispo)';
+        const margin = ct.margin_min ? ` (± ${ct.margin_min} min${rt})` : rt;
         trainBlock = `<div class="train ${riskClass}">Train le plus proche : <strong>${ct.t}</strong>${margin} (${ct.type}) — ${Math.round(absDelta)} min ${sign} le passage des coureurs</div>`;
+      } else if (c.stationInfo && c.stationInfo.error) {
+        riskClass = 'low';
+        trainBlock = `<div class="train watchlo">⚠️ Horaires indisponibles pour ce PN (${c.stationInfo.error})</div>`;
       } else {
         riskClass = 'low';
-        trainBlock = `<div class="train low">Aucun train connu sur cette ligne le ${SCHEDULE_DATE}</div>`;
+        trainBlock = `<div class="train low">Aucun train trouvé autour de l'heure de passage le ${raceDate}</div>`;
       }
       const lineInfo = LINE_TYPES[pn.ligne];
       let sourceNote;
-      if (SCHEDULE[scheduleKey]) {
-        sourceNote = `Horaires interpolés du ${SCHEDULE_DATE} à partir des données GTFS officielles SNCF, propres à ce PN précis (voir data/schedule.json pour la méthode).`;
+      if (c.trains && c.trains.length && c.stationInfo && c.stationInfo.name) {
+        const distKm = c.stationInfo.distance != null ? (c.stationInfo.distance/1000).toFixed(1) : '?';
+        sourceNote = `Horaires temps réel API SNCF, gare la plus proche : ${c.stationInfo.name} (à ${distKm} km du PN). La marge indiquée reflète la distance entre la gare et le PN, pas une interpolation exacte.`;
       } else if (lineInfo) {
         const noTrain = lineInfo.types.length === 1 && lineInfo.types[0].startsWith('Aucun');
         sourceNote = noTrain
@@ -478,9 +510,12 @@ async function init() {
     });
   }
   
-  function refreshAll(){
+  async function refreshAll(){
     const pnMatchM = parseFloat(document.getElementById('buffer').value) || 150;
     computeCrossings(pnMatchM);
+    const dateISO = document.getElementById('startDate').value;
+    const timeHHMM = document.getElementById('startTime').value || '14:30';
+    await loadSchedulesForCrossings(dateISO, timeHHMM);
     render();
   }
 
@@ -519,7 +554,7 @@ async function init() {
           drawRoute(points);
           statusEl.textContent = `Tracé importé depuis "${file.name}" (${points.length} points, ${fmtKm(totalDist)}) — recherche des passages à niveau sur cette zone…`;
           await loadDataForRoute(points, false); // pas de repli local : hors zone Jard–Les Herbiers
-          refreshAll();
+          await refreshAll();
         } catch (err) {
           statusEl.textContent = "Erreur d'import GPX : " + err.message;
         }
@@ -534,24 +569,31 @@ async function init() {
   }
 
   if (gpxResetBtn) {
+    gpxResetBtn.disabled = !ROUTE_ORIGINAL;
     gpxResetBtn.addEventListener('click', async () => {
+      if (!ROUTE_ORIGINAL) return;
       drawRoute(ROUTE_ORIGINAL);
       statusEl.textContent = "Tracé d'origine restauré — rechargement des données…";
       await loadDataForRoute(ROUTE_ORIGINAL, true);
-      refreshAll();
+      await refreshAll();
     });
   }
 
+  // startTime/speed : n'affectent que le calcul local (le train le plus proche dans la
+  // fenêtre déjà récupérée), pas besoin de rappeler l'API à chaque changement.
   document.getElementById('startTime').addEventListener('input', updateTimes);
   document.getElementById('speed').addEventListener('input', updateTimes);
+  // buffer et startDate changent respectivement la liste des PN et la date interrogée :
+  // il faut refaire un appel à l'API SNCF dans les deux cas.
   document.getElementById('buffer').addEventListener('input', refreshAll);
-  
+  document.getElementById('startDate').addEventListener('input', refreshAll);
+
   drawRoute(ROUTE);
   recomputeSummary();
   if (ROUTE.length) {
     statusEl.textContent = "Recherche des passages à niveau et voies ferrées sur cette zone (SNCF Réseau)…";
     await loadDataForRoute(ROUTE, true);
-    refreshAll();
+    await refreshAll();
   } else {
     statusEl.textContent = "Importez un fichier GPX pour commencer.";
   }

@@ -1,0 +1,14 @@
+{
+  "name": "site-pn-dynamique",
+  "version": "1.0.0",
+  "description": "Passages à niveau — backend de relais vers l'API SNCF temps réel",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5"
+  }
+}
